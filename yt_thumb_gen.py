@@ -86,6 +86,11 @@ def generate_assets(topic, messages):
                     raise ValueError("Expected integer for 'height'")
                 
                 logging.info(f"Generating asset with name '{img['simple_name_of_asset']}' and prompt '{img['prompt']}'")
+                print(f"running ag with parameters {img['simple_name_of_asset'], 
+                img['prompt'], 
+                img['width'],
+                img['height'],
+                "null"}")
                 ag(name=img['simple_name_of_asset'], 
                 prompt=img['prompt'], 
                 width=img['width'],
