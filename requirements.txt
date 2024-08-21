@@ -1,0 +1,3 @@
+groq
+gradio_client
+Pillow
