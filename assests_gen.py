@@ -5,7 +5,7 @@ from gradio_client import Client
 # Set environmental variable for asset directory if not defined already
 asset_dir_path = os.environ.get('ASSET_DIR_PATH', 'assets')
 
-def generate_image(prompt, name, negative_prompt="null", seed=0, randomize_seed=True, width=1024, height=1024, guidance_scale=5,
+def generate_image(prompt, name, negative_prompt="(deformed, distorted, disfigured:1.3), poorly drawn, bad anatomy, wrong anatomy, extra limb, missing limb, floating limbs, (mutated hands and fingers:1.4), disconnected limbs, mutation, mutated, ugly, disgusting, blurry, amputation", seed=0, randomize_seed=True, width=1024, height=1024, guidance_scale=5,
 num_inference_steps=28, api_name="/infer"):
     try:
         # Initialize the Gradio client with the model's identifier
