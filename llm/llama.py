@@ -1,13 +1,14 @@
 import os
 import json
 from groq import Groq
-
+import time
 client = Groq(
 # This is the default and can be omitted
-api_key="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",
+api_key="",
 )
 
 def LLM(messages: list, message: str, role: str):
+    time.sleep(5)
     # Append user message to messages list
     messages.append({"role": role, "content": message})
 
