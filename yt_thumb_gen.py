@@ -116,12 +116,11 @@ def generate_assets(topic, messages):
                 img['prompt'], 
                 img['width'],
                 img['height'],
-                "null"}")
+                }")
                 ag(name=img['simple_name_of_asset'], 
                 prompt=img['prompt'], 
                 width=img['width'],
-                height=img['height'],
-                negative_prompt="null")  # Add negative_prompt here
+                height=img['height'])  # Add negative_prompt here
 
             except KeyError as e:
                 logging.error(f"Missing key in image data: {e}")
