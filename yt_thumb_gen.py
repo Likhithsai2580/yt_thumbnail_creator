@@ -2,13 +2,39 @@ from llm.llama import LLM
 import json
 import logging
 from assests_gen import generate_image as ag
-from llm.filter import filter_json, filter_python
 from PIL import Image, ImageDraw, ImageFont
 
 # Configuration
 THUMBNAIL_PATH = 'static/thumbnail.png'
 FONT_SIZE = 50
 logging.basicConfig(level=logging.INFO)
+
+import re
+
+def filter_python(txt):
+    print("Filtering Python code")
+    pattern = r"```python(.*?)```"
+    matches = re.findall(pattern, txt, re.DOTALL)
+    pattern = r"```(.*?)```"
+    matches = re.findall(pattern, txt, re.DOTALL)
+    if matches:
+        python_code = matches[0].strip()
+        return python_code
+    else:
+        return txt
+
+def filter_json(txt):
+    print("Filtering JSON code")
+    pattern = r"```json(.*?)```"
+    matches = re.findall(pattern, txt, re.DOTALL)
+    pattern = r"```(.*?)```"
+    matches = re.findall(pattern, txt, re.DOTALL)
+    if matches:
+        json_code = matches[0].strip()
+        return json_code
+    else:
+        return txt
+
 
 messages = [
     {
