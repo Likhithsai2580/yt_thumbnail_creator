@@ -11,6 +11,7 @@ import time
 from colorama import Fore, Style, init
 from rembg import remove
 import io
+import argparse
 
 # Initialize colorama for colored console output
 init(autoreset=True)
@@ -312,11 +313,23 @@ def remove_bg_from_asset(asset_name):
 
 if __name__ == "__main__":
     try:
-        topic = "JARVIS A VIRTUAL ARTIFICIAL INTELLEGENCE DEMO"
-        if not topic:
+        parser = argparse.ArgumentParser(description="Generate YouTube thumbnail based on a topic.")
+        parser.add_argument("topic", help="The topic for the thumbnail")
+        parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+        args = parser.parse_args()
+
+        # Set logging level based on debug flag
+        if args.debug:
+            logger.setLevel(logging.DEBUG)
+            handler.setLevel(logging.DEBUG)
+        else:
+            logger.setLevel(logging.INFO)
+            handler.setLevel(logging.INFO)
+
+        if not args.topic:
             logging.error(f"{Fore.RED}No topic provided. Exiting.{Style.RESET_ALL}")
         else:
-            assets = generate_assets(topic, messages)
+            assets = generate_assets(args.topic, messages)
             if not assets:
                 logging.error(f"{Fore.RED}No assets were generated. Exiting.{Style.RESET_ALL}")
                 exit(1)
