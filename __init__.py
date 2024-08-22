@@ -1,0 +1,1 @@
+from yt_thumb_gen import generate_assets
