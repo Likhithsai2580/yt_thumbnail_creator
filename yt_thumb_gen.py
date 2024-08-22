@@ -5,13 +5,18 @@ import os
 import shutil
 from PIL import Image, ImageDraw, ImageFont
 import re
-from llm.llama import LLM
+from llm.llama import LLM, api_key
 import traceback
 import time
 from colorama import Fore, Style, init
 from rembg import remove
 import io
 import argparse
+
+if api_key is None:
+    os.environ["GROQ_API_KEY"] = input("please insert api key for groq: ")
+    print("api key set, restart the module")
+    exit()
 
 # Initialize colorama for colored console output
 init(autoreset=True)

@@ -2,9 +2,12 @@ import os
 import json
 from groq import Groq
 import time
+
+api_key = os.getenv("GROQ_API_KEY")
+
 client = Groq(
 # This is the default and can be omitted
-api_key="",
+api_key=api_key,
 )
 
 def LLM(messages: list, message: str, role: str):
