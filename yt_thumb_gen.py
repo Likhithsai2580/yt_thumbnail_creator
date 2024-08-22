@@ -6,6 +6,14 @@ import shutil
 from PIL import Image, ImageDraw, ImageFont
 import re
 from llm.llama import LLM
+import traceback
+import time
+from colorama import Fore, Style, init
+from rembg import remove
+import io
+
+# Initialize colorama for colored console output
+init(autoreset=True)
 
 # Configuration
 THUMBNAIL_PATH = 'static/thumbnail.png'
@@ -71,7 +79,7 @@ messages = [
 ]
 
 def generate_asset(prompt, name, negative_prompt=None, seed=0, randomize_seed=True, width=1024, height=1024, guidance_scale=5, num_inference_steps=28):
-    """Generates an asset based on the provided parameters and saves it to the asset directory."""
+    """Generates an asset based on the provided parameters and saves it as a PNG file."""
     try:
         result = client.predict(
             prompt=prompt,
@@ -88,26 +96,45 @@ def generate_asset(prompt, name, negative_prompt=None, seed=0, randomize_seed=Tr
         image_filepath, seed_value = result
         os.makedirs(ASSET_DIR_PATH, exist_ok=True)
 
-        new_image_filename = f"{name}.webp"
+        new_image_filename = f"{name}.png"
         existing_count = 1
         while os.path.exists(os.path.join(ASSET_DIR_PATH, new_image_filename)):
-            new_image_filename = f"{name}_{existing_count}.webp"
+            new_image_filename = f"{name}_{existing_count}.png"
             existing_count += 1
 
-        shutil.move(image_filepath, os.path.join(ASSET_DIR_PATH, new_image_filename))
-        logging.info(f"Asset '{name}' generated and saved to '{new_image_filename}'")
-        return os.path.join(ASSET_DIR_PATH, new_image_filename), seed_value
+        # Convert to PNG and optimize
+        with Image.open(image_filepath) as img:
+            img = img.convert("RGBA")
+            output_path = os.path.join(ASSET_DIR_PATH, new_image_filename)
+            img.save(output_path, format="PNG", optimize=True, quality=85)
+
+        os.remove(image_filepath)  # Remove the original file
+        logging.info(f"{Fore.GREEN}Asset '{name}' generated and saved as PNG: '{new_image_filename}'{Style.RESET_ALL}")
+        return output_path, seed_value
 
     except Exception as e:
-        logging.error(f"An error occurred during asset generation: {e}")
+        logging.error(f"{Fore.RED}An error occurred during asset generation: {e}{Style.RESET_ALL}")
         return None
 
 def extract_code(text, language):
     """Extracts code blocks of a specific language from text."""
-    logging.info(f"Extracting {language} code")
-    pattern = rf"```{language}(.*?)```"
+    logging.info(f"{Fore.CYAN}Extracting {language} code{Style.RESET_ALL}")
+    
+    # First, try to find code within triple backticks
+    pattern = rf"```{language}?(.*?)```"
     matches = re.findall(pattern, text, re.DOTALL)
-    return matches[0].strip() if matches else ""
+    
+    if matches:
+        return matches[0].strip()
+    else:
+        # If no code block is found, check if the entire response looks like Python code
+        lines = text.strip().split('\n')
+        code_lines = [line for line in lines if line.strip() and not line.startswith('#')]
+        
+        if code_lines and all(line.strip().startswith(('add_to_thumbnail', 'add_text_to_thumbnail', 'save_thumbnail', 'remove_bg_from_asset')) or '=' in line for line in code_lines):
+            return '\n'.join(lines)
+    
+    return ""
 
 def validate_json_structure(imgs_info):
     """Validates the structure of the parsed JSON."""
@@ -129,18 +156,48 @@ def validate_json_structure(imgs_info):
             raise ValueError("Expected integer for 'height'")
     return imgs_data
 
-def generate_assets(topic, messages):
-    """Generates assets based on the given topic using the LLM."""
+def execute_llm_instructions(instructions, max_retries=3, retry_delay=20):
+    """Executes LLM instructions and handles responses with retry logic."""
+    for attempt in range(max_retries):
+        try:
+            response = LLM(messages, instructions, "system")
+            if response is None:
+                raise ValueError("LLM response is None")
+
+            code = extract_code(response, 'python')
+            if not code:
+                logging.warning(f"{Fore.YELLOW}No Python code found in LLM response (attempt {attempt + 1}/{max_retries}). Full response:\n{response}{Style.RESET_ALL}")
+                if attempt < max_retries - 1:
+                    logging.info(f"{Fore.CYAN}Retrying in {retry_delay} seconds...{Style.RESET_ALL}")
+                    time.sleep(retry_delay)
+                    continue
+                else:
+                    raise ValueError("Max retries reached. No Python code found in LLM responses.")
+
+            logging.info(f"{Fore.GREEN}Executing code:\n{code}{Style.RESET_ALL}")
+            exec(code, globals())  # Ensure this is safe and trusted
+            return  # Success, exit the function
+        except Exception as e:
+            logging.error(f"{Fore.RED}Error executing LLM instructions (attempt {attempt + 1}/{max_retries}): {e}{Style.RESET_ALL}")
+            if attempt < max_retries - 1:
+                logging.info(f"{Fore.CYAN}Retrying in {retry_delay} seconds...{Style.RESET_ALL}")
+                time.sleep(retry_delay)
+            else:
+                raise  # Re-raise the last exception if all retries failed
+
+def generate_assets(topic, messages, image_delay=60):
     try:
         response = LLM(messages, topic, "user")
         if response is None:
             raise ValueError("LLM response is None")
 
-        json_response = extract_code(response, 'json')
-        if not json_response:
-            raise ValueError("Filtered JSON response is None")
+        # Add error handling for JSON parsing
+        try:
+            imgs_info = json.loads(response)
+        except json.JSONDecodeError:
+            logging.error(f"Failed to parse JSON from LLM response: {response}")
+            return []
 
-        imgs_info = json.loads(json_response)
         imgs_data = validate_json_structure(imgs_info)
 
         generated_assets = []
@@ -160,6 +217,9 @@ def generate_assets(topic, messages):
                     })
                 else:
                     logging.warning(f"Failed to generate asset '{simple_name}'")
+                
+                logging.info(f"Waiting {image_delay} seconds before generating the next asset...")
+                time.sleep(image_delay)
             except KeyError as e:
                 logging.error(f"Missing key in image data: {e}")
             except Exception as e:
@@ -172,87 +232,124 @@ def generate_assets(topic, messages):
 
 def add_to_thumbnail(asset_name, location_x, location_y):
     """Adds an asset to the thumbnail at a specific location."""
-    logging.info(f"Adding asset '{asset_name}' to thumbnail")
+    logging.info(f"{Fore.CYAN}Adding asset '{asset_name}' to thumbnail{Style.RESET_ALL}")
     try:
         with Image.open(THUMBNAIL_PATH) as thumbnail:
             asset_path = os.path.join(ASSET_DIR_PATH, asset_name)
             with Image.open(asset_path) as asset:
                 thumbnail.paste(asset, (location_x, location_y), asset)
-                thumbnail.save(THUMBNAIL_PATH)
-        logging.info(f"Added '{asset_name}' to the thumbnail at ({location_x}, {location_y})")
+                thumbnail.save(THUMBNAIL_PATH, format="PNG")
+        logging.info(f"{Fore.GREEN}Added '{asset_name}' to the thumbnail at ({location_x}, {location_y}){Style.RESET_ALL}")
     except Exception as e:
-        logging.error(f"Error adding asset to thumbnail: {e}")
+        logging.error(f"{Fore.RED}Error adding asset to thumbnail: {e}{Style.RESET_ALL}")
 
 def add_text_to_thumbnail(text, font_path, color, position='center'):
     """Adds text to the thumbnail."""
-    logging.info(f"Adding text '{text}' to thumbnail")
+    logging.info(f"{Fore.CYAN}Adding text '{text}' to thumbnail{Style.RESET_ALL}")
     try:
         with Image.open(THUMBNAIL_PATH) as thumbnail:
             draw = ImageDraw.Draw(thumbnail)
             try:
                 font = ImageFont.truetype(font_path, size=FONT_SIZE)
             except IOError:
-                logging.warning(f"Font file '{font_path}' not found. Using default font.")
+                logging.warning(f"{Fore.YELLOW}Font file '{font_path}' not found. Using default font.{Style.RESET_ALL}")
                 font = ImageFont.load_default()
             text_width, text_height = draw.textsize(text, font=font)
             width, height = thumbnail.size
             if position == 'center':
                 position = ((width - text_width) / 2, (height - text_height) / 2)
             draw.text(position, text, fill=color, font=font)
-            thumbnail.save(THUMBNAIL_PATH)
-        logging.info(f"Added text '{text}' to the thumbnail")
+            thumbnail.save(THUMBNAIL_PATH, format="PNG")
+        logging.info(f"{Fore.GREEN}Added text '{text}' to the thumbnail{Style.RESET_ALL}")
     except Exception as e:
-        logging.error(f"Error adding text to thumbnail: {e}")
+        logging.error(f"{Fore.RED}Error adding text to thumbnail: {e}{Style.RESET_ALL}")
 
 def save_thumbnail(filename):
     """Saves the thumbnail with the given filename."""
-    logging.info(f"Saving thumbnail as '{filename}.png'")
+    logging.info(f"{Fore.CYAN}Saving thumbnail as '{filename}.png'{Style.RESET_ALL}")
     try:
         with Image.open(THUMBNAIL_PATH) as thumbnail:
-            thumbnail.save(f'{filename}.png')
-        logging.info(f"Thumbnail saved as '{filename}.png'")
+            thumbnail.save(f'{filename}.png', format="PNG")
+        logging.info(f"{Fore.GREEN}Thumbnail saved as '{filename}.png'{Style.RESET_ALL}")
     except Exception as e:
-        logging.error(f"Error saving thumbnail: {e}")
+        logging.error(f"{Fore.RED}Error saving thumbnail: {e}{Style.RESET_ALL}")
 
-def execute_llm_instructions(instructions):
-    """Executes LLM instructions and handles responses."""
+def remove_bg_from_asset(asset_name):
+    """Removes the background from an asset and optimizes the output."""
+    logging.info(f"{Fore.CYAN}Removing background from asset '{asset_name}'{Style.RESET_ALL}")
     try:
-        response = LLM(messages, instructions, "system")
-        if response is None:
-            raise ValueError("LLM response is None")
-
-        code = extract_code(response, 'python')
-        if not code:
-            raise ValueError("Filtered Python code is None")
-
-        logging.info(f"Executing code: {code}")
-        exec(code, globals())  # Ensure this is safe and trusted
+        asset_path = os.path.join(ASSET_DIR_PATH, asset_name)
+        if os.path.exists(asset_path):
+            with Image.open(asset_path) as img:
+                # Convert to RGB if the image is in RGBA mode
+                if img.mode == 'RGBA':
+                    img = img.convert('RGB')
+                
+                # Remove background
+                output = remove(img)
+                
+                # Optimize the image
+                output = output.convert("RGBA")
+                
+                # Create a new filename with .png extension
+                base_name = os.path.splitext(asset_name)[0]
+                output_filename = f"nobg_{base_name}.png"
+                output_path = os.path.join(ASSET_DIR_PATH, output_filename)
+                
+                # Save the optimized PNG
+                output.save(output_path, format="PNG", optimize=True, quality=85)
+                
+            logging.info(f"{Fore.GREEN}Removed background from '{asset_name}' and saved as '{output_filename}'{Style.RESET_ALL}")
+            return output_filename
+        else:
+            logging.warning(f"{Fore.YELLOW}Asset '{asset_name}' not found in assets{Style.RESET_ALL}")
+            return None
     except Exception as e:
-        logging.error(f"Error executing LLM instructions: {e}")
+        logging.error(f"{Fore.RED}Error removing background from asset: {e}{Style.RESET_ALL}")
+        return None
 
 if __name__ == "__main__":
-    topic = input("Enter the topic: ")
-    if not topic:
-        logging.error("No topic provided. Exiting.")
-    else:
-        generate_assets(topic, messages)
+    try:
+        topic = "JARVIS A VIRTUAL ARTIFICIAL INTELLEGENCE DEMO"
+        if not topic:
+            logging.error(f"{Fore.RED}No topic provided. Exiting.{Style.RESET_ALL}")
+        else:
+            assets = generate_assets(topic, messages)
+            if not assets:
+                logging.error(f"{Fore.RED}No assets were generated. Exiting.{Style.RESET_ALL}")
+                exit(1)
 
-        # Instructions for LLM to assemble the thumbnail
-        assembly_messages = """
-        Imagine the images you generated. Now, provide code to assemble the thumbnail.
-        Use the following functions:
+            # Instructions for LLM to assemble the thumbnail
+            assembly_messages = """
+            Imagine the images you generated. Now, provide code to assemble the thumbnail.
+            Use the following functions:
 
-        - `add_to_thumbnail(asset_name, location_x, location_y)`
-        - `add_text_to_thumbnail(text, font_path, color, position='center')`
-        - `save_thumbnail(filename)`
+            - `add_to_thumbnail(asset_name, location_x, location_y)`
+            - `add_text_to_thumbnail(text, font_path, color, position='center')`
+            - `save_thumbnail(filename)`
+            - `remove_bg_from_asset(asset_name)`  # Use this to remove background from an asset. Returns the new filename with 'nobg_' prefix and '.png' extension.
 
-        For example:
+            All assets are now in PNG format. Respond ONLY with a Python code block. Do not include triple backticks in your response.
+            """
+            execute_llm_instructions(assembly_messages)
+    except Exception as e:
+        logging.error(f"{Fore.RED}An unexpected error occurred: {e}{Style.RESET_ALL}")
+        logging.error(f"{Fore.RED}{traceback.format_exc()}{Style.RESET_ALL}")
 
-        ```python
-        add_to_thumbnail('background', 0, 0)
-        add_to_thumbnail('main_subject', 100, 100)
-        add_text_to_thumbnail('Sample Text', 'arial.ttf', 'white')
-        save_thumbnail('final_thumbnail') 
-        ```
-        """
-        execute_llm_instructions(assembly_messages)
+# Modify the logger to include colors
+class ColoredFormatter(logging.Formatter):
+    COLORS = {
+        'DEBUG': Fore.BLUE,
+        'INFO': Fore.GREEN,
+        'WARNING': Fore.YELLOW,
+        'ERROR': Fore.RED,
+        'CRITICAL': Fore.RED + Style.BRIGHT,
+    }
+
+    def format(self, record):
+        log_message = super().format(record)
+        return f"{self.COLORS.get(record.levelname, '')}{log_message}{Style.RESET_ALL}"
+
+# Update the logger configuration
+formatter = ColoredFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)

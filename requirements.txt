@@ -1,3 +1,5 @@
 groq
 gradio_client
 Pillow
+rembg
+colorama
