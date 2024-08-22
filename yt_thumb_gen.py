@@ -143,21 +143,32 @@ def generate_assets(topic, messages):
         imgs_info = json.loads(json_response)
         imgs_data = validate_json_structure(imgs_info)
 
+        generated_assets = []
         for img in imgs_data:
             try:
-                logging.info(f"Generating asset '{img['simple_name_of_asset']}' with prompt '{img['prompt']}'")
-                generate_asset(
-                    name=img['simple_name_of_asset'],
-                    prompt=img['prompt'],
-                    width=img['width'],
-                    height=img['height']
-                )
+                simple_name = img.get('simple_name_of_asset')
+                prompt = img.get('prompt')
+                logging.info(f"Generating asset '{simple_name}' with prompt '{prompt}'")
+                
+                asset_path, seed = generate_asset(prompt, simple_name)
+                
+                if asset_path:
+                    generated_assets.append({
+                        'name': simple_name,
+                        'path': asset_path,
+                        'seed': seed
+                    })
+                else:
+                    logging.warning(f"Failed to generate asset '{simple_name}'")
             except KeyError as e:
                 logging.error(f"Missing key in image data: {e}")
             except Exception as e:
                 logging.error(f"Error generating asset '{img.get('simple_name_of_asset', 'unknown')}': {e}")
+        
+        return generated_assets
     except Exception as e:
         logging.error(f"Error generating assets: {e}")
+        return []
 
 def add_to_thumbnail(asset_name, location_x, location_y):
     """Adds an asset to the thumbnail at a specific location."""
@@ -218,9 +229,9 @@ def execute_llm_instructions(instructions):
         exec(code, globals())  # Ensure this is safe and trusted
     except Exception as e:
         logging.error(f"Error executing LLM instructions: {e}")
-'''
+
 if __name__ == "__main__":
-    topic = "JARVIS A VIRTUAL ARTIFICIAL INTELLEGENCE DEMO"
+    topic = input("Enter the topic: ")
     if not topic:
         logging.error("No topic provided. Exiting.")
     else:
@@ -245,6 +256,3 @@ if __name__ == "__main__":
         ```
         """
         execute_llm_instructions(assembly_messages)
-'''
-
-generate_asset("doraemon, teddybear and pikachu", "dm&p")
