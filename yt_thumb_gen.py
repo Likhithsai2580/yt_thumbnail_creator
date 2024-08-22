@@ -218,7 +218,7 @@ def execute_llm_instructions(instructions):
         exec(code, globals())  # Ensure this is safe and trusted
     except Exception as e:
         logging.error(f"Error executing LLM instructions: {e}")
-
+'''
 if __name__ == "__main__":
     topic = "JARVIS A VIRTUAL ARTIFICIAL INTELLEGENCE DEMO"
     if not topic:
@@ -245,3 +245,6 @@ if __name__ == "__main__":
         ```
         """
         execute_llm_instructions(assembly_messages)
+'''
+
+generate_asset("doraemon, teddybear and pikachu", "dm&p")
