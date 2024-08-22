@@ -114,7 +114,7 @@ def generate_asset(prompt, name, negative_prompt=None, seed=0, randomize_seed=Tr
 
     except Exception as e:
         logging.error(f"{Fore.RED}An error occurred during asset generation: {e}{Style.RESET_ALL}")
-        return None
+        return None, None  # Return None for both output_path and seed_value
 
 def extract_code(text, language):
     """Extracts code blocks of a specific language from text."""
@@ -205,9 +205,11 @@ def generate_assets(topic, messages, image_delay=60):
             try:
                 simple_name = img.get('simple_name_of_asset')
                 prompt = img.get('prompt')
+                width = img.get('width', 1024)  # Use default value if not provided
+                height = img.get('height', 1024)  # Use default value if not provided
                 logging.info(f"Generating asset '{simple_name}' with prompt '{prompt}'")
                 
-                asset_path, seed = generate_asset(prompt, simple_name)
+                asset_path, seed = generate_asset(prompt, simple_name, width=width, height=height)
                 
                 if asset_path:
                     generated_assets.append({
