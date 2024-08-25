@@ -38,8 +38,8 @@ An AI-powered YouTube thumbnail generator that leverages Stable Diffusion and La
 
 1. Clone this repository:
    ```
-   git clone https://github.com/Likhithsai2580/youtube-thumbnail-generator.git
-   cd youtube-thumbnail-generator
+   git clone https://github.com/Likhithsai2580/yt_thumbnail_creator.git
+   cd yt_thumbnail_creator
    ```
 
 2. Install the required packages:
