@@ -1,6 +1,7 @@
 import os
 import shutil
 from gradio_client import Client
+from PIL import Image
 
 # Set environmental variable for asset directory if not defined already
 asset_dir_path = os.environ.get('ASSET_DIR_PATH', 'assets')
@@ -31,14 +32,19 @@ num_inference_steps=28, api_name="/infer"):
         os.makedirs(asset_dir_path, exist_ok=True)
 
         # Create unique filename if it already exists
-        new_image_filename = f"{name}.webp"
+        new_image_filename = f"{name}.png"
         existing_count = 1
         while os.path.exists(os.path.join(asset_dir_path, new_image_filename)):
-            new_image_filename = f"{name}_{existing_count}.webp"
+            new_image_filename = f"{name}_{existing_count}.png"
             existing_count += 1
 
-        # Move and rename the image file to the assets directory
-        shutil.move(image_filepath, os.path.join(asset_dir_path, new_image_filename))
+        # Convert to PNG and optimize
+        with Image.open(image_filepath) as img:
+            img = img.convert("RGBA")
+            output_path = os.path.join(asset_dir_path, new_image_filename)
+            img.save(output_path, format="PNG", optimize=True, quality=85)
+
+        os.remove(image_filepath)  # Remove the original file
 
         return os.path.join(asset_dir_path, new_image_filename), seed_value
 

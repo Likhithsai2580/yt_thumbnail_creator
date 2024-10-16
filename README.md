@@ -74,8 +74,11 @@ Modify the following variables in the script to customize the thumbnail generati
 
 ## Detailed Function Descriptions
 
-### `generate_asset(prompt)`
-Generates an image asset using Stable Diffusion based on the given prompt.
+### `generate_image(prompt, name, negative_prompt, seed, randomize_seed, width, height, guidance_scale, num_inference_steps, api_name)`
+Generates an image using the most efficient way and saves it as a PNG file.
+
+### `generate_asset(prompt, name, negative_prompt, seed, randomize_seed, width, height, guidance_scale, num_inference_steps)`
+Generates an asset using the most efficient way and saves it as a PNG file.
 
 ### `extract_code(response)`
 Extracts Python code from LLM responses for further processing.
